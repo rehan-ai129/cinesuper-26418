@@ -30,3 +30,31 @@ where duration_min = (select max(duration_min) from movies);
 -- Q8. Update a description
 update movies set description = 'An epic sci-fi journey through space and time.'
 where title = 'Interstellar';
+
+-- PART B: MY OWN QUERIES
+
+-- B1. All reviews with the movie title
+select r.reviewer_name, r.rating, r.comment, m.title
+from reviews r
+join movies m on m.id = r.movie_id;
+
+-- B2. Number of movies per language
+select language, count(*) as total_movies
+from movies
+group by language
+order by total_movies desc;
+
+-- B3. Newest movie in the database
+select title, release_year
+from movies
+order by release_year desc
+limit 1;
+
+-- B4. Movies whose title starts with M
+select title
+from movies
+where title like 'M%';
+
+-- B5. Delete one review
+delete from reviews
+where id = 1;
