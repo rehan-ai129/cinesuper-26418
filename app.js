@@ -6,6 +6,7 @@ const grid        = document.getElementById("movieGrid");
 const statusEl    = document.getElementById("status");
 const searchInput = document.getElementById("search");
 const genreFilter = document.getElementById("genreFilter");
+const languageFilter = document.getElementById("languageFilter");
 const modal       = document.getElementById("modal");
 const movieDetail = document.getElementById("movieDetail");
 const reviewList  = document.getElementById("reviewList");
@@ -51,19 +52,23 @@ async function loadRatings() {
 }
 
 // 5. SELECT movies JOIN genres, with search and filter
-async function loadMovies() {
+async function loadMovies()
+{
   statusEl.textContent = "Loading movies...";
 
   let query = db
     .from("movies")
-    .select("id, title, release_year, language, duration_min, description, poster_url, genres(name)")
+    .select("id, title, release_year, language, duration_min, description, poster_url, director, genres(name)")
     .order("release_year", { ascending: false });
 
   const search = searchInput.value.trim();
   const genreId = genreFilter.value;
+   const language = languageFilter.value;
   if (search)  query = query.ilike("title", `%${search}%`);
   if (genreId) query = query.eq("genre_id", genreId);
-
+  if (language) {
+  query = query.eq("language", language);
+}
   const { data, error } = await query;
   if (error) return showError(error);
 
@@ -75,7 +80,7 @@ async function loadMovies() {
   );
 }
 
-function movieCard(m) {
+ function movieCard(m) {
   const r = ratingsMap[m.id];
   const stars = r && r.avg_rating ? `⭐ ${r.avg_rating} (${r.review_count})` : "No ratings yet";
   return `
@@ -92,19 +97,26 @@ function movieCard(m) {
 // 6. Movie detail popup
 async function openMovie(id) {
   const m = movies.find((x) => x.id === id);
-  if (!m) return;
-  currentMovieId = id;
-  movieDetail.innerHTML = `
+movieDetail.innerHTML = `
     <h2>${escapeHtml(m.title)}</h2>
-    <p class="meta">${m.release_year} · ${escapeHtml(m.language)} · ${escapeHtml(m.genres?.name)} · ${m.duration_min} min</p>
-    <p>${escapeHtml(m.description)}</p>`;
+    <p class="meta">
+      ${m.release_year} ·
+      ${escapeHtml(m.language)} ·
+      ${escapeHtml(m.genres?.name)} ·
+      ${m.duration_min} min
+    </p>
+
+    <p><strong>Director:</strong> ${escapeHtml(m.director || "Not available")}</p>
+
+    <p>${escapeHtml(m.description)}</p>
+  `;
+
   modal.classList.remove("hidden");
   await loadReviews(id);
 }
-
-// 7. SELECT * FROM reviews WHERE movie_id = ?
 async function loadReviews(movieId) {
   reviewList.innerHTML = "<p>Loading reviews...</p>";
+
   const { data, error } = await db
     .from("reviews")
     .select("reviewer_name, rating, comment, created_at")
@@ -112,16 +124,20 @@ async function loadReviews(movieId) {
     .order("created_at", { ascending: false });
 
   if (error) {
-    reviewList.innerHTML = `<p>Error: ${escapeHtml(error.message)}</p>`;
+    reviewList.innerHTML =
+      `<p>Error: ${escapeHtml(error.message)}</p>`;
     return;
   }
+
   reviewList.innerHTML = data.length
     ? data.map((r) => `
         <div class="review">
-          <strong>${"⭐".repeat(r.rating)}</strong> — ${escapeHtml(r.reviewer_name)}
+          <strong>${"⭐".repeat(r.rating)}</strong> —
+          ${escapeHtml(r.reviewer_name)}
           <p>${escapeHtml(r.comment)}</p>
           <small>${new Date(r.created_at).toLocaleString()}</small>
-        </div>`).join("")
+        </div>
+      `).join("")
     : "<p>No reviews yet. Be the first!</p>";
 }
 
@@ -157,11 +173,29 @@ searchInput.addEventListener("input", () => {
   typingTimer = setTimeout(loadMovies, 300);
 });
 genreFilter.addEventListener("change", loadMovies);
-
+languageFilter.addEventListener("change", loadMovies);
 // 11. Start
 async function init() {
   await loadGenres();
   await loadRatings();
+
+  const { data, error } = await db
+    .from("movies")
+    .select("language");
+
+  if (error) {
+    console.error(error);
+  } else {
+    const languages = [...new Set(data.map((m) => m.language))].sort();
+
+    languages.forEach((language) => {
+      const opt = document.createElement("option");
+      opt.value = language;
+      opt.textContent = language;
+      languageFilter.appendChild(opt);
+    });
+  }
+
   await loadMovies();
 }
 init();
